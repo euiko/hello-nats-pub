@@ -1,0 +1,26 @@
+---
+kind: pipeline
+type: kubernetes
+name: hello-nats-pub
+
+steps:
+- name: build and test
+  image: golang:1.13-alpine
+  commands:
+  - go mod download
+  - go build
+  # - go test
+- name: push image
+  image: plugins/docker
+  environment:
+    PLUGIN_MTU: 1376
+  settings:
+    repo: docker-registry.mlg-dev.local/euiko/hello-nats-pub
+    registry: docker-registry.mlg-dev.local
+    auto_tag: true
+    insecure: true
+trigger:
+  ref:
+  - refs/heads/master
+  - "refs/tags/**"
+  - "refs/pull/**"

@@ -57,11 +57,12 @@ func logger(message string) {
 func ackHandler(ackedNuid string, err error) {
 	logger(fmt.Sprintf("ACKed with Nuid: %s", ackedNuid))
 	if err != nil {
-		logger(fmt.Sprintf("Error occured: %s", err))
+		logger(fmt.Sprintf("ACK error occured: %s", err))
 	}
 }
 
 func main() {
+	logger("Starting hello-nats-pub...")
 	config := getConfig()
 	opts := []stan.Option{}
 	if config.NatsURL != "" {
@@ -79,6 +80,7 @@ func main() {
 
 	var err error
 
+	logger("Connecting...")
 	stanConnection, err = stan.Connect(config.StanClusterID, config.StanClientID, opts...)
 	if err != nil {
 		log.Print(err)
@@ -88,7 +90,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/publish", publish)
-	r.HandleFunc("/healthz", healtz)
+	r.HandleFunc("/healthz", healthz)
 	r.HandleFunc("/ready", ready)
 	r.HandleFunc("/metrics", metrics)
 
@@ -104,12 +106,31 @@ func publish(w http.ResponseWriter, req *http.Request) {
 	if text != "" {
 		msg = text
 	}
+	logger(fmt.Sprintf("Publishing : %v", msg))
 	stanConnection.Publish("demo", []byte(msg))
 
 }
 
-func healtz(w http.ResponseWriter, req *http.Request) {
-	http.Error(w, "I'm not live", 503)
+func healthz(w http.ResponseWriter, req *http.Request) {
+	config := getConfig()
+	opts := []stan.Option{}
+	if config.NatsURL != "" {
+		opts = append(opts, stan.NatsURL(config.NatsURL))
+	}
+	offset := fmt.Sprintf("%v", time.Now().Unix())
+	conn, err := stan.Connect(config.StanClusterID, config.StanClientID+offset, opts...)
+	if err != nil {
+		http.Error(w, "I'm not live", 503)
+		logger(fmt.Sprintf("Error on healthz check failed: %s", err))
+		return
+	}
+	if err := conn.Close(); err != nil {
+		http.Error(w, "I'm not live", 503)
+		logger(fmt.Sprintf("Error on healthz check failed: %s", err))
+		return
+	}
+
+	fmt.Fprint(w, "Yey I'm healthy")
 }
 
 func ready(w http.ResponseWriter, req *http.Request) {
